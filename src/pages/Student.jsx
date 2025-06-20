@@ -4,14 +4,48 @@ import { motion } from 'framer-motion';
 export default function Student() {
   const [respuesta, setRespuesta] = useState('');
   const [feedback, setFeedback] = useState('');
+  const [cargando, setCargando] = useState(false);
 
-  const verificarRespuesta = () => {
-    if (respuesta.toLowerCase().includes('h')) {
-      setFeedback('✅ ¡Muy bien! Has usado la “h” correctamente.');
-    } else {
-      setFeedback('❌ Revisa el uso de la “h”. Inténtalo de nuevo.');
+  const verificarRespuesta = async () => {
+    if (!respuesta.trim()) {
+      setFeedback('Por favor, escribe una oración.');
+      return;
+    }
+
+    setCargando(true);
+    setFeedback('');
+
+    try {
+      const respuestaAPI = await fetch('https://api.languagetoolplus.com/v2/check', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          text: respuesta,
+          language: 'es',
+        }),
+      });
+
+      const data = await respuestaAPI.json();
+
+      if (data.matches.length === 0) {
+        setFeedback('✅ ¡Muy bien! No se encontraron errores.');
+      } else {
+        const sugerencias = data.matches.map((m, i) => (
+          `• ${m.message} → sugerencia: ${m.replacements?.[0]?.value || 'ninguna'}`
+        )).join('\n\n');
+
+        setFeedback(`🔍 Se encontraron ${data.matches.length} posibles errores:\n\n${sugerencias}`);
+      }
+    } catch (error) {
+      console.error('Error con LanguageTool:', error);
+      setFeedback('❌ Error al conectar con LanguageTool.');
+    } finally {
+      setCargando(false);
     }
   };
+
 
   return (
     <motion.div
@@ -23,7 +57,7 @@ export default function Student() {
       <div className="w-full max-w-2xl bg-white p-10 rounded-2xl shadow-xl space-y-6 text-center">
         <h2 className="text-3xl font-bold text-gray-800">Ejercicio Ortográfico</h2>
         <p className="text-lg text-gray-700">
-          Escribe una oración que use correctamente la letra “h”.
+          Escribe una oración y la IA verificará si contiene errores ortográficos.
         </p>
 
         <textarea
@@ -35,16 +69,15 @@ export default function Student() {
 
         <button
           onClick={verificarRespuesta}
-          className="px-6 py-3 bg-indigo-600 text-white rounded-xl text-lg font-semibold hover:bg-indigo-700 transition"
+          className="px-6 py-3 bg-indigo-600 text-white rounded-xl text-lg font-semibold hover:bg-indigo-700 transition disabled:opacity-50"
+          disabled={cargando || !respuesta.trim()}
         >
-          Verificar
+          {cargando ? 'Verificando...' : 'Verificar'}
         </button>
 
         {feedback && (
           <motion.div
-            className={`text-lg font-medium ${
-            feedback.includes('✅') ? 'text-green-700' : 'text-red-600'
-            }`}
+            className="text-lg font-medium text-gray-800 bg-gray-100 p-4 rounded-lg shadow-inner"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.4 }}
@@ -52,8 +85,9 @@ export default function Student() {
             {feedback}
           </motion.div>
         )}
-        
       </div>
     </motion.div>
   );
+  
+
 }
